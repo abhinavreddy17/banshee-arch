@@ -5,6 +5,9 @@ Computer Architecture Simulation Infrastructure for CSCE 614 Computer Architectu
 
 ##### 1. Apply a path file for cse server
 
+
+
+
 ```
 $ git apply cse_server.patch
 ```
