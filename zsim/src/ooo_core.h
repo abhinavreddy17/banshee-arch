@@ -50,11 +50,9 @@ class BranchPredictorPAg {
     private:
         uint32_t bhsr[1 << NB];
         uint8_t pht[1 << LB];
-        bool useA2; // Ture: use A2, else use A3
 
     public:
         BranchPredictorPAg() {
-            useA2 = true;
             uint32_t numBhsrs = 1 << NB;
             uint32_t phtSize = 1 << LB;
 
@@ -93,20 +91,12 @@ class BranchPredictorPAg {
             // info("BP Pred: 0x%lx bshr[%d]=%x taken=%d pht=%d pred=%d", branchPc, bhsrIdx, phtIdx, taken, pht[phtIdx], pred);
 
             // Update
-            if (useA2) {
-                pht[phtIdx] = taken? (pred? 3 : (pht[phtIdx]+1)) : (pred? (pht[phtIdx]-1) : 0); //2-bit saturating counter
-            } else {
-                // Please implement Automaton 3 for update
-
-            }
+            pht[phtIdx] = taken? (pred? 3 : (pht[phtIdx]+1)) : (pred? (pht[phtIdx]-1) : 0); //2-bit saturating counter
             bhsr[bhsrIdx] = ((bhsr[bhsrIdx] << 1) & histMask ) | (taken? 1: 0); //we apply phtMask here, dependence is further away
 
             // info("BP Update: newPht=%d newBshr=%x", pht[phtIdx], bhsr[bhsrIdx]);
             return (taken == pred);
         }
-
-        // Set to use Automaton 3
-        inline void useA3() {useA2 = false;}
 };
 
 
@@ -423,7 +413,7 @@ class OOOCore : public Core {
         uint64_t decodeCycle;
         CycleQueue<28> uopQueue;  // models issue queue
 
-        uint64_t instrs, uops, bbls, approxInstrs, mispredBranches, condBranches;
+        uint64_t instrs, uops, bbls, approxInstrs, mispredBranches;
 
 #ifdef OOO_STALL_STATS
         Counter profFetchStalls, profDecodeStalls, profIssueStalls;
@@ -463,9 +453,6 @@ class OOOCore : public Core {
         inline EventRecorder* getEventRecorder() {return cRec.getEventRecorder();}
         void cSimStart();
         void cSimEnd();
-
-        // Set Automaton 3 for branch predictor update
-        inline void useA3forBranchPred() {branchPred.useA3();}
 
     private:
         inline void load(Address addr);

@@ -54,7 +54,6 @@
 #include "null_core.h"
 #include "ooo_core.h"
 #include "part_repl_policies.h"
-#include "rrip_repl.h"
 #include "pin_cmd.h"
 #include "prefetcher.h"
 #include "proc_stats.h"
@@ -74,6 +73,7 @@
 #include "tracing_cache.h"
 #include "virt/port_virtualizer.h"
 #include "weave_md1_mem.h" //validation, could be taken out...
+#include "mc.h"
 #include "zsim.h"
 
 extern void EndOfPhaseActions(); //in zsim.cpp
@@ -165,12 +165,6 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
         rp = new NRUReplPolicy(numLines, candidates);
     } else if (replType == "Rand") {
         rp = new RandReplPolicy(candidates);
-    } else if (replType == "SRRIP") {
-        // max value of RRPV, you need to pass it to your SRRIP constructor
-        uint32_t rpvMax = config.get<bool>(prefix + "repl.rpvMax", 3);
-        assert(isPow2(rpvMax + 1));
-        // add your SRRIP construction code here
-
     } else if (replType == "WayPart" || replType == "Vantage" || replType == "IdealLRUPart") {
         if (replType == "WayPart" && arrayType != "SetAssoc") panic("WayPart replacement requires SetAssoc array");
 
@@ -294,7 +288,7 @@ BaseCache* BuildCacheBank(Config& config, const string& prefix, g_string& name, 
         //Filter cache optimization
         if (type != "Simple") panic("Terminal cache %s can only have type == Simple", name.c_str());
         if (arrayType != "SetAssoc" || hashType != "None" || replType != "LRU") panic("Invalid FilterCache config %s", name.c_str());
-        cache = new FilterCache(numSets, numLines, cc, array, rp, accLat, invLat, name);
+        cache = new FilterCache(numSets, numLines, cc, array, rp, accLat, invLat, name, config);
     }
 
 #if 0
@@ -339,8 +333,10 @@ MemObject* BuildMemoryController(Config& config, uint32_t lineSize, uint32_t fre
 
     MemObject* mem = nullptr;
     if (type == "Simple") {
-        mem = new SimpleMemory(latency, name);
-    } else if (type == "MD1") {
+        mem = new SimpleMemory(latency, name, config);
+    } else if (type == "DramCache") {
+		mem = new MemoryController(name, frequency, domain, config);	
+	} else if (type == "MD1") {
         // The following params are for MD1 only
         // NOTE: Frequency (in MHz) -- note this is a sys parameter (not sys.mem). There is an implicit assumption of having
         // a single CCT across the system, and we are dealing with latencies in *core* clock cycles
@@ -355,7 +351,7 @@ MemObject* BuildMemoryController(Config& config, uint32_t lineSize, uint32_t fre
         mem = new WeaveMD1Memory(lineSize, frequency, bandwidth, latency, boundLatency, domain, name);
     } else if (type == "WeaveSimple") {
         uint32_t boundLatency = config.get<uint32_t>("sys.mem.boundLatency", 100);
-        mem = new WeaveSimpleMemory(latency, boundLatency, domain, name);
+        mem = new WeaveSimpleMemory(latency, boundLatency, domain, name, config);
     } else if (type == "DDR") {
         mem = BuildDDRMemory(config, lineSize, frequency, domain, name, "sys.mem.");
     } else if (type == "DRAMSim") {
@@ -387,13 +383,15 @@ CacheGroup* BuildCacheGroup(Config& config, const string& name, bool isTerminal)
     bool isPrefetcher = config.get<bool>(prefix + "isPrefetcher", false);
     if (isPrefetcher) { //build a prefetcher group
         uint32_t prefetchers = config.get<uint32_t>(prefix + "prefetchers", 1);
+		uint32_t streamBuffers = config.get<uint32_t>(prefix + "buffers", 16);
+        bool partitionBuffers = config.get<bool>(prefix + "partitionBuffers", false);
         cg.resize(prefetchers);
         for (vector<BaseCache*>& bg : cg) bg.resize(1);
         for (uint32_t i = 0; i < prefetchers; i++) {
             stringstream ss;
             ss << name << "-" << i;
             g_string pfName(ss.str().c_str());
-            cg[i][0] = new StreamPrefetcher(pfName);
+            cg[i][0] = new StreamPrefetcher(pfName, streamBuffers, partitionBuffers);
         }
         return cgp;
     }
@@ -519,7 +517,7 @@ static void InitSystem(Config& config) {
     if (memControllers > 1) {
         bool splitAddrs = config.get<bool>("sys.mem.splitAddrs", true);
         if (splitAddrs) {
-            MemObject* splitter = new SplitAddrMemory(mems, "mem-splitter");
+            MemObject* splitter = new SplitAddrMemory(mems, "mem-splitter", config);
             mems.resize(1);
             mems[0] = splitter;
         }
@@ -573,6 +571,7 @@ static void InitSystem(Config& config) {
                   "Use multiple groups for non-homogeneous children per parent!", grp, parents, children);
         }
 
+		printf("children = %d, parents=%d\n", children, parents);
         for (uint32_t p = 0; p < parents; p++) {
             g_vector<MemObject*> parentsVec;
             parentsVec.insert(parentsVec.end(), parentCaches[p].begin(), parentCaches[p].end()); //BaseCache* to MemObject* is a safe cast
@@ -581,6 +580,7 @@ static void InitSystem(Config& config) {
             g_vector<BaseCache*> childrenVec;
             for (uint32_t c = p*childrenPerParent; c < (p+1)*childrenPerParent; c++) {
                 for (BaseCache* bank : childCaches[c]) {
+					//printf("bank=%s, parents.size=%ld\n", bank->getName(), parentsVec.size());
                     bank->setParents(childId++, parentsVec, network);
                     childrenVec.push_back(bank);
                 }
@@ -632,7 +632,6 @@ static void InitSystem(Config& config) {
             string prefix = string("sys.cores.") + group + ".";
             uint32_t cores = config.get<uint32_t>(prefix + "cores", 1);
             string type = config.get<const char*>(prefix + "type", "Simple");
-            string automaton = config.get<const char*>(prefix + "automaton", "A2");
 
             //Build the core group
             union {
@@ -703,7 +702,6 @@ static void InitSystem(Config& config) {
                         zinfo->eventRecorders[coreIdx] = ocore->getEventRecorder();
                         zinfo->eventRecorders[coreIdx]->setSourceId(coreIdx);
                         core = ocore;
-                        if (automaton == "A3") ocore->useA3forBranchPred();
                     }
                     coreMap[group].push_back(core);
                     coreIdx++;
@@ -775,7 +773,7 @@ static void InitSystem(Config& config) {
     //Initialize event recorders
     //for (uint32_t i = 0; i < zinfo->numCores; i++) eventRecorders[i] = new EventRecorder();
 
-    AggregateStat* memStat = new AggregateStat(true);
+    AggregateStat* memStat = new AggregateStat();
     memStat->init("mem", "Memory controller stats");
     for (auto mem : mems) mem->initStats(memStat);
     zinfo->rootStat->append(memStat);
@@ -869,12 +867,10 @@ static void InitGlobalStats() {
 
 void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
     zinfo = gm_calloc<GlobSimInfo>();
-    //zinfo->outputDir = gm_strdup(outputDir);
+    zinfo->outputDir = gm_strdup(outputDir);
     zinfo->statsBackends = new g_vector<StatsBackend*>();
 
     Config config(configFile);
-
-    zinfo->outputDir = gm_strdup(config.get<const char*>("pin.outputDir", outputDir));
 
     //Debugging
     //NOTE: This should be as early as possible, so that we can attach to the debugger before initialization.
@@ -1025,7 +1021,7 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
     config.get<bool>("sim.aslr", false);
 
     //Write config out
-    bool strictConfig = config.get<bool>("sim.strictConfig", true); //if true, panic on unused variables
+    bool strictConfig = config.get<bool>("sim.strictConfig", false); //if true, panic on unused variables
     config.writeAndClose((string(zinfo->outputDir) + "/out.cfg").c_str(), strictConfig);
 
     zinfo->contentionSim->postInit();
