@@ -1,6 +1,12 @@
 # banshee-arch
 
 
+Computer Architecture Simulation Infrastructure for CSCE 614 Computer Architecture
+
+$ source setup_env
+
+
+
 This project is based on paper below.
 
 Banshee architecture: Banshee's DRAM cache is set-associative. In this architecture we assume both the in-package and off-package DRAM has the same memory controller and few changes were made to the state-of-art DRAM cache design.
