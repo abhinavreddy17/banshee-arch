@@ -48,6 +48,18 @@ Banshee architecture: Banshee's DRAM cache is set-associative. In this architect
 Integrating DRAM within the same package as a processor results in a substantial increase in memory bandwidth, exceeding that of traditional off-package DRAM by several times.
 We propose to follow the paper with a novel DRAM cache design named "Banshee" that aims to enhance both in-package and off-package DRAM bandwidth efficiency while maintaining low access latency. With this project we aim to understand new architecture for Large memory bandwidth models.
 
+### Link for the paper
 
+@misc{yu2017banshee,
+      title={Banshee: Bandwidth-Efficient DRAM Caching Via Software/Hardware Cooperation}, 
+      author={Xiangyao Yu and Christopher J. Hughes and Nadathur Satish and Onur Mutlu and Srinivas Devadas},
+      year={2017},
+      eprint={1704.02677},
+      archivePrefix={arXiv},
+      primaryClass={cs.AR}
+}
+
+
+https://arxiv.org/abs/1704.02677
 
 ###### For more information, check `zsim/README.md`
