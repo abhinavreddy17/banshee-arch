@@ -1,7 +1,7 @@
 # casim
 Computer Architecture Simulation Infrastructure for CSCE 614 Computer Architecture
 
-
+ZSim was being used as a simulator for this project
 
 ##### 1. Apply a path file for cse server
 
