@@ -48,7 +48,13 @@ Banshee architecture: Banshee's DRAM cache is set-associative. In this architect
 Integrating DRAM within the same package as a processor results in a substantial increase in memory bandwidth, exceeding that of traditional off-package DRAM by several times.
 We propose to follow the paper with a novel DRAM cache design named "Banshee" that aims to enhance both in-package and off-package DRAM bandwidth efficiency while maintaining low access latency. With this project we aim to understand new architecture for Large memory bandwidth models.
 
-We have added the off-package and in-package DRAM cache functionality in the following code file(ddr mem.c++ and header file ddr mem.h). Each cache has its own memory controller here and thus the memory controller functionality is implemented in the following code file(DRAM controller.c++). And also implemented line_replacement policies in the zsim/src folder that we have used. Also added a feature prefetcher to prefetcth data from memory based on previous behavior of the program. Added a stats_cpp code to extend the previously existed stats. We also needed the data transfer rate(Bytes per instruction transferred) from DRAM to memory. All the files that are updated are present in the zsim/src files. Also some external libs are used form the author as prescribed. 
+We've introduced both off-package and in-package DRAM cache functionalities through the "ddr_mem.c++" and "ddr_mem.h" files. Each cache now has its memory controller, implemented in the "DRAM_controller.c++" file. Line replacement policies have been implemented in the "zsim/src" directory. Additionally, we've integrated a prefetcher that anticipates data based on the program's past behavior. To gather extended statistics, a "stats_cpp" code has been included. Furthermore, we've calculated the data transfer rate (Bytes per instruction transferred) from DRAM to memory. All updated files can be found in the "zsim/src" directory, and certain external libraries specified by the author have been utilized.
+
+
+
+
+
+
 
 ### Link for the paper
 
